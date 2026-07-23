@@ -55,11 +55,19 @@ async def extract_nid(
     return await service.extract(front_bytes, back_bytes)
 
 
-@router.get("/api/v1/samples/front")
+SAMPLE_IMAGE_RESPONSES = {
+    200: {
+        "content": {"image/png": {"schema": {"type": "string", "format": "binary"}}},
+        "description": "Synthetic NID sample image (PNG)",
+    }
+}
+
+
+@router.get("/api/v1/samples/front", response_class=FileResponse, responses=SAMPLE_IMAGE_RESPONSES)
 async def sample_front() -> FileResponse:
     return FileResponse(SAMPLES_DIR / "nid_front_synthetic.png", media_type="image/png")
 
 
-@router.get("/api/v1/samples/back")
+@router.get("/api/v1/samples/back", response_class=FileResponse, responses=SAMPLE_IMAGE_RESPONSES)
 async def sample_back() -> FileResponse:
     return FileResponse(SAMPLES_DIR / "nid_back_synthetic.png", media_type="image/png")

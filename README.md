@@ -10,7 +10,10 @@ KYC/onboarding flows with a single image upload.
 - [Overview](#overview)
 - [Architecture Diagram](#architecture-diagram)
 - [Technology Stack](#technology-stack)
+  - [AI / OCR Libraries Used](#ai--ocr-libraries-used)
 - [Quick Start](#quick-start)
+  - [Build Instructions](#build-instructions)
+  - [Run Instructions](#run-instructions)
 - [Demo UI](#demo-ui)
 - [Configuration](#configuration)
 - [Live Mode Setup](#live-mode-setup)
@@ -130,14 +133,54 @@ and threat model.
 | Demo UI | Vanilla HTML/CSS/JS + Google Fonts "Inter" | No build step, no framework version drift, trivially served as static files by FastAPI. Inter (via CDN link, no bundler) is the one intentional external dependency — a widely-used professional UI typeface (Linear, Stripe, GitHub) swapped in for the system font stack to read as a polished product rather than a generic form. |
 | Testing | pytest + FastAPI TestClient | In-process HTTP testing without a running server; runs identically on host or in-container. |
 
+### AI / OCR Libraries Used
+
+- **[`google-genai`](https://pypi.org/project/google-genai/)** — Google's Gemini SDK. This is the
+  project's OCR *and* translation layer: Gemini (flash-tier, `gemini-flash-latest`) reads the NID
+  images directly and returns structured, English-translated fields in one call. See
+  [Overview](#overview) for why this replaces a classical OCR engine (e.g. Tesseract) rather than
+  sitting alongside one.
+- **[`Pillow`](https://pypi.org/project/pillow/)** — image validation and preprocessing only
+  (format/size checks, EXIF rotation, resizing). Does no OCR itself; all text recognition and
+  translation is Gemini's.
+
+No traditional OCR library (Tesseract, EasyOCR, etc.) is used — that is a deliberate architectural
+choice, not an omission; see [Overview](#overview) for the reasoning.
+
 ## Quick Start
 
 ```bash
 git clone https://github.com/nomadnahid007/nid-lens-bd-idlc.git
 cd nid-lens-bd-idlc
 cp .env.example .env
+```
+
+### Build Instructions
+
+```bash
+docker compose build
+```
+
+Builds the API image (slim Python 3.12 base, pinned dependencies from `requirements.txt`, non-root
+user) — no local Python installation or dependency setup required.
+
+### Run Instructions
+
+```bash
+docker compose up
+```
+
+Or build and run in a single step (the recommended golden path, used throughout this README):
+
+```bash
 docker compose up --build
-open http://localhost:8000   # or just visit it in a browser
+```
+
+Then open `http://localhost:8000` in a browser, or check the health endpoint:
+
+```bash
+curl http://localhost:8000/health
+# {"status":"ready","mode":"demo","model":"gemini-flash-latest"}
 ```
 
 The default `.env` ships with `APP_MODE=demo` — **evaluators can exercise the entire system,
@@ -145,13 +188,6 @@ including a full extraction round-trip, without any Gemini API key.** Demo mode 
 fixture data (see [fixtures/demo_response.json](fixtures/demo_response.json)) instead of calling the
 live model, so the UI, validation, normalization warnings, and error paths are all real — only the
 model call itself is swapped out.
-
-Health check:
-
-```bash
-curl http://localhost:8000/health
-# {"status":"ready","mode":"demo","model":"gemini-flash-latest"}
-```
 
 ## Demo UI
 
