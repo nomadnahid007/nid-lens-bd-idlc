@@ -21,7 +21,6 @@ KYC/onboarding flows with a single image upload.
 - [Design Decisions](#design-decisions)
 - [Testing](#testing)
 - [Privacy](#privacy)
-- [AI Usage](#ai-usage)
 - [Limitations](#limitations)
 - [License](#license)
 
@@ -451,24 +450,6 @@ aren't used for model training, explicit customer consent language before upload
 transit (already true — HTTPS at the ingress in front of this service) and a documented retention
 policy (currently: none, by design, but a production system would need audit trails), and a security
 review of the multipart upload path.
-
-## AI Usage
-
-**Tools:** Claude (via the Claude Code VS Code extension) for scaffolding and implementation across
-every phase of this project. Gemini (flash-tier, via `gemini-flash-latest`) is the runtime model the
-shipped application itself calls in live mode — a product dependency, not a build tool.
-
-**Verification:** every phase was checked with the same method — the automated test suite
-(`docker compose exec api pytest`), curl-based smoke tests against a running container for every new
-endpoint and error path, and a full read-through of every AI-generated file before treating it as
-done. Several real issues were caught this way during development (a broken response-schema
-conversion in an early SDK version, a model deprecation, a CSS specificity bug that silently
-defeated the `hidden` attribute, an unvalidated image-quality heuristic that misfired on a real
-photo) — each one diagnosed, fixed, and re-verified against a live run, not just asserted.
-
-A full prompt-by-prompt log, phase-by-phase verification detail, and a table of every place
-AI-generated code was manually adjusted (and why) are kept as private working notes for the
-interview rather than in this repo — available on request.
 
 ## Limitations
 
