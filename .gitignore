@@ -22,6 +22,7 @@ docs/PROMPTS_LOG.md
 docs/AI_USAGE.md
 docs/DEMO_SCRIPT.md
 docs/REQUIREMENT_TRACEABILITY.md
+docs/IMPLEMENTATION_SUMMARY.md
 
 # Local Claude Code session config — not part of the project
 .claude/
