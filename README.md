@@ -133,7 +133,7 @@ and threat model.
 ## Quick Start
 
 ```bash
-git clone <this-repo-url>   # or unzip the submission archive
+git clone https://github.com/nomadnahid007/nid-lens-bd-idlc.git
 cd nid-lens-bd-idlc
 cp .env.example .env
 docker compose up --build
