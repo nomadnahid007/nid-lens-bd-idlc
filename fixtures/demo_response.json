@@ -1,0 +1,24 @@
+{
+  "data": {
+    "name": "Md. Rahim Uddin",
+    "fatherName": "Md. Abdul Karim",
+    "motherName": "Amena Begum",
+    "dateOfBirth": "1998-01-15",
+    "nidNumber": "1234567890",
+    "presentAddress": "House 12, Road 4, Dhanmondi, Dhaka",
+    "permanentAddress": "Dakshinpara Village, Sadar Post Office, Cumilla"
+  },
+  "confidence": {
+    "name": 0.98,
+    "fatherName": 0.91,
+    "motherName": 0.93,
+    "dateOfBirth": 0.99,
+    "nidNumber": 0.99,
+    "presentAddress": 0.88,
+    "permanentAddress": 0.86
+  },
+  "rawText": {
+    "front": "গণপ্রজাতন্ত্রী বাংলাদেশ সরকার\nজাতীয় পরিচয় পত্র\nনাম: মোঃ রহিম উদ্দিন\nপিতা: মোঃ আব্দুল করিম\nমাতা: আমেনা বেগম\nজন্ম তারিখ: ১৫ জানুয়ারি ১৯৯৮\nNID: 1234567890",
+    "back": "ঠিকানা:\nবাসা ১২, রোড ৪, ধানমন্ডি, ঢাকা\nস্থায়ী ঠিকানা:\nদক্ষিণপাড়া গ্রাম, সদর ডাকঘর, কুমিল্লা"
+  }
+}

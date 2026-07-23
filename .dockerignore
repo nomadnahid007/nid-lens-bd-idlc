@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+
+# Env
+.env
+
+# OS
+.DS_Store
+
+# Demo NID images — real NIDs never committed
+demo/*.jpg
+demo/*.jpeg
+demo/*.png
+
+# Project files not needed in the image
+docs/
+.git
+README.md

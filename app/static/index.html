@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#4f46e5" />
+  <meta
+    name="description"
+    content="Extract structured, English-translated data from Bangladesh National ID cards."
+  />
+  <title>NID Lens BD</title>
+
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
+  <!-- Self-hosted font: preloaded so text renders in its final typeface on
+       first paint with no external request and no visible font swap. -->
+  <link rel="preload" href="/fonts/inter-var-latin.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="page">
+    <header class="header">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">
+          <svg width="26" height="26" viewBox="0 0 26 26" fill="none">
+            <rect x="1" y="1" width="24" height="24" rx="7" stroke="currentColor" stroke-width="1.6" />
+            <path d="M7.5 13a5.5 5.5 0 1 1 8.9 4.33" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+            <circle cx="13" cy="13" r="2.1" stroke="currentColor" stroke-width="1.6" />
+            <path d="M16.6 16.6 19 19" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+          </svg>
+        </span>
+        <div class="header-text">
+          <h1>NID Lens BD</h1>
+          <p class="subtitle">Extract structured data from Bangladesh National ID cards</p>
+        </div>
+      </div>
+      <div id="modeBadge" class="badge badge-neutral">
+        <span class="badge-dot"></span>
+        <span class="badge-text">Checking service…</span>
+      </div>
+    </header>
+
+    <main class="main">
+      <section class="card upload-card">
+        <div class="upload-row">
+          <div class="dropzone" id="dropzoneFront" data-side="front" tabindex="0" role="button" aria-label="Upload NID front image">
+            <input type="file" id="fileFront" accept=".jpg,.jpeg,.png,image/jpeg,image/png" hidden />
+            <div class="dropzone-empty">
+              <span class="dropzone-icon" aria-hidden="true">
+                <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+                  <path d="M11 14.5V4.5M11 4.5 6.5 9M11 4.5 15.5 9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+                  <path d="M4 15v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+                </svg>
+              </span>
+              <span class="dropzone-label">NID Front</span>
+              <span class="dropzone-hint">Drag &amp; drop or click to browse</span>
+            </div>
+            <div class="dropzone-filled" hidden>
+              <div class="preview-card">
+                <img class="preview-thumb" alt="Front preview" />
+                <button type="button" class="remove-btn" data-side="front" aria-label="Remove front image">
+                  <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+                    <path d="M2 2l9 9M11 2l-9 9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+                  </svg>
+                </button>
+              </div>
+              <div class="file-meta">
+                <span class="file-name"></span>
+                <span class="file-size"></span>
+              </div>
+            </div>
+          </div>
+
+          <div class="dropzone" id="dropzoneBack" data-side="back" tabindex="0" role="button" aria-label="Upload NID back image">
+            <input type="file" id="fileBack" accept=".jpg,.jpeg,.png,image/jpeg,image/png" hidden />
+            <div class="dropzone-empty">
+              <span class="dropzone-icon" aria-hidden="true">
+                <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+                  <path d="M11 14.5V4.5M11 4.5 6.5 9M11 4.5 15.5 9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+                  <path d="M4 15v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+                </svg>
+              </span>
+              <span class="dropzone-label">NID Back</span>
+              <span class="dropzone-hint">Drag &amp; drop or click to browse</span>
+            </div>
+            <div class="dropzone-filled" hidden>
+              <div class="preview-card">
+                <img class="preview-thumb" alt="Back preview" />
+                <button type="button" class="remove-btn" data-side="back" aria-label="Remove back image">
+                  <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+                    <path d="M2 2l9 9M11 2l-9 9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+                  </svg>
+                </button>
+              </div>
+              <div class="file-meta">
+                <span class="file-name"></span>
+                <span class="file-size"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <p class="privacy-note">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+            <path d="M6 1 10.5 2.7v2.8c0 2.7-1.9 5.2-4.5 5.9C3.4 10.7 1.5 8.2 1.5 5.5V2.7L6 1Z" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round" />
+          </svg>
+          Images are processed in memory and are not stored.
+        </p>
+
+        <div class="action-row">
+          <button type="button" id="extractBtn" class="btn btn-primary" disabled>
+            <span class="spinner" hidden></span>
+            <span class="btn-label">Extract</span>
+          </button>
+          <button type="button" id="resetBtn" class="btn btn-ghost">Reset</button>
+          <a href="#" id="sampleLink" class="sample-link">Use sample NID images</a>
+        </div>
+      </section>
+
+      <div id="errorBanner" class="error-banner" hidden>
+        <svg class="error-icon" width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+          <circle cx="9" cy="9" r="7.5" stroke="currentColor" stroke-width="1.4" />
+          <path d="M9 5.5v4M9 12.1v.1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
+        </svg>
+        <div class="error-body">
+          <div class="error-code"></div>
+          <div class="error-message"></div>
+          <div class="error-suggestion"></div>
+        </div>
+      </div>
+
+      <section id="resultsPanel" class="card results-panel" hidden>
+        <div class="results-header">
+          <h2>Extraction Result</h2>
+          <span id="statusPill" class="status-pill"></span>
+        </div>
+
+        <div class="results-grid">
+          <div class="results-column">
+            <h3>Extracted Fields</h3>
+            <div id="fieldsList" class="fields-list"></div>
+          </div>
+
+          <div class="results-column">
+            <h3>Raw OCR Text</h3>
+            <details class="raw-text-block" open>
+              <summary>Front</summary>
+              <pre id="rawTextFront" class="raw-text"></pre>
+            </details>
+            <details class="raw-text-block">
+              <summary>Back</summary>
+              <pre id="rawTextBack" class="raw-text"></pre>
+            </details>
+
+            <h3>Warnings</h3>
+            <div id="warningsList" class="warnings-list"></div>
+          </div>
+        </div>
+
+        <div class="results-footer">
+          <div id="metaFooter" class="meta-footer"></div>
+          <div class="results-actions">
+            <button type="button" id="copyJsonBtn" class="btn btn-ghost">Copy JSON</button>
+            <button type="button" id="downloadJsonBtn" class="btn btn-ghost">Download JSON</button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <a href="/docs" target="_blank" rel="noopener">API docs (Swagger)</a>
+      <span class="footer-sep">·</span>
+      <a href="/health" target="_blank" rel="noopener">/health</a>
+      <span class="footer-sep">·</span>
+      <span class="footer-note">Built for IDLC Tech Accelerator</span>
+    </footer>
+  </div>
+
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

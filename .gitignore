@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+
+# Env
+.env
+
+# OS
+.DS_Store
+
+# Demo NID images — real NIDs never committed
+demo/*.jpg
+demo/*.jpeg
+demo/*.png
+
+# Personal interview-prep docs — kept locally, not pushed to the public repo
+docs/PROMPTS_LOG.md
+docs/AI_USAGE.md
+docs/DEMO_SCRIPT.md
+docs/REQUIREMENT_TRACEABILITY.md
+
+# Local Claude Code session config — not part of the project
+.claude/
