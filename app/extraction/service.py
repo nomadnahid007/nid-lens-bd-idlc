@@ -19,6 +19,14 @@ REQUIRED_FIELDS = [
 # before anyone looked at the image.
 LOW_CONFIDENCE_THRESHOLD = 0.6
 
+# Warning codes strong enough that the response can never be reported
+# "complete" while one is present, even if every field technically has a
+# value — each of these means specific data is very likely wrong, not just
+# imprecise or worth a second look. (low_confidence, unusual_nid_length, etc.
+# are NOT in this set on purpose: they're informational flags for a human
+# reviewer, not evidence the extraction itself failed.)
+CRITICAL_WARNING_CODES = {"not_an_nid", "duplicate_address", "cross_field_collision"}
+
 
 class ExtractionService:
     def __init__(self, provider: ExtractionProvider, settings: Settings):
@@ -68,6 +76,22 @@ class ExtractionService:
                     "field": field,
                 })
 
+        # Demo mode returns the same pre-recorded fixture regardless of what
+        # was uploaded — it exists to exercise the rest of the system (UI,
+        # validation, error handling) without an API key, not to simulate
+        # per-image OCR. Every demo-mode response says so explicitly, so a
+        # fixture result can never be mistaken for real analysis of the
+        # uploaded images.
+        if self.settings.app_mode == "demo":
+            all_warnings.append({
+                "code": "simulated_response",
+                "message": (
+                    "This is pre-recorded demo data, not a live analysis of the uploaded images. "
+                    "Set APP_MODE=live with a Gemini API key for real extraction."
+                ),
+                "field": None,
+            })
+
         # Deduplicate warnings by code
         seen = set()
         deduped = []
@@ -77,8 +101,12 @@ class ExtractionService:
                 seen.add(key)
                 deduped.append(w)
 
-        # Status
-        status = "complete" if all(normalized_data.get(f) for f in REQUIRED_FIELDS) else "partial"
+        # Status — "complete" requires both a value in every field AND no
+        # critical warning; a critical warning means the values present are
+        # not trustworthy even though they're non-null.
+        has_critical_warning = any(w.get("code") in CRITICAL_WARNING_CODES for w in deduped)
+        all_fields_present = all(normalized_data.get(f) for f in REQUIRED_FIELDS)
+        status = "complete" if (all_fields_present and not has_critical_warning) else "partial"
 
         elapsed_ms = int((time.perf_counter() - start) * 1000)
 

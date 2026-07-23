@@ -21,6 +21,7 @@ KYC/onboarding flows with a single image upload.
 - [Design Decisions](#design-decisions)
 - [Testing](#testing)
 - [Privacy](#privacy)
+- [AI Usage](#ai-usage)
 - [Limitations](#limitations)
 - [License](#license)
 
@@ -160,6 +161,13 @@ step, served directly by FastAPI's `StaticFiles` mount.
 - **Header** — title, subtitle, and a live mode badge populated from `GET /health` on load (green
 "Demo mode · fixture data", green "Live mode · gemini-flash-latest", or amber "Live mode: API key
 missing").
+- **Demo mode is a fixed fixture, not a live analysis of your images — and every response says so.**
+`APP_MODE=demo` exists so the entire system (upload validation, error handling, response shape, this
+UI) can be exercised with zero API key and zero cost. It does **not** simulate per-image OCR — it
+returns the same pre-recorded `fixtures/demo_response.json` regardless of what's uploaded. Every
+demo-mode response carries an explicit `simulated_response` warning saying exactly that, so it can
+never be mistaken for a real read of the images you selected. Switch to `APP_MODE=live` (see [Live
+Mode Setup](#live-mode-setup)) to have your actual images analyzed.
 - **Upload zone** — two drag-and-drop targets ("NID Front" / "NID Back"), each also click-to-browse.
 Selecting a file shows a thumbnail preview, filename, and size. `.jpg`/`.jpeg`/`.png` only, checked
 client-side before upload and re-validated server-side regardless.
@@ -314,7 +322,7 @@ curl -X POST http://localhost:8000/api/v1/nid/extract \
 | 415 | `UNSUPPORTED_MEDIA_TYPE` | File decodes as an image but isn't JPEG or PNG. | Upload JPG, JPEG, or PNG only. |
 | 422 | *(FastAPI native)* | Request is missing a required field or has the wrong shape — not a JSON body with a `code` field, but FastAPI's standard `{"detail": [...]}` validation array. | Check the field names (`front`, `back`) and that both are present. |
 | 503 | `NO_API_KEY` | `APP_MODE=live` but `GEMINI_API_KEY` is unset. Returned as `{"detail": {"code": ..., ...}}` since it's raised via `HTTPException`, not a custom exception handler. | Set `GEMINI_API_KEY` in `.env`, or switch `APP_MODE=demo`. |
-| 503 | `PROVIDER_UNAVAILABLE` | The Gemini SDK call raised (network error, quota, invalid response, etc.). | Retry shortly, or switch `APP_MODE=demo`. |
+| 503 | `PROVIDER_UNAVAILABLE` | The Gemini SDK call raised (network error, invalid/unparseable response, or the call exceeded a 30-second timeout). The underlying exception is logged server-side for debugging but never included in the response — the client-facing message is always one of a small set of generic, safe strings. | Retry shortly, or switch `APP_MODE=demo`. |
 
 Two response shapes exist by design: the custom exception handlers in `app/main.py`
 (400/413/415/`PROVIDER_UNAVAILABLE`) return a flat body — `{"code", "message", "suggestion"}` —
@@ -322,20 +330,24 @@ while `NO_API_KEY` is raised as a plain FastAPI `HTTPException`, whose default h
 same shape under `{"detail": {...}}`. The UI's `app.js` normalizes both shapes before displaying an
 error banner. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for why this wasn't unified further.
 
-### Warnings (non-blocking — still `200 OK`)
+### Warnings (non-blocking, but not all equally serious)
 
-Not every quality issue is a hard error. A request can succeed (`200`, `status: "complete"` or
-`"partial"`) while still carrying `warnings` that flag something worth a human's attention —
-this is the "ask to re-upload" case: the API doesn't refuse the image outright, it tells the
-caller (and the UI shows it in the Warnings panel) that the result might be worth double-checking:
+Not every quality issue is a hard error. A request can still succeed (`200`) while carrying
+`warnings` that flag something worth a human's attention. But "non-blocking" doesn't mean "doesn't
+affect `status`" — a **critical** warning below means the data present is likely *wrong*, not just
+imprecise, so it forces `status: "partial"` even if all seven fields technically have a value.
+Non-critical warnings are informational only and never change `status` on their own.
 
-| `code` | Raised by | Meaning |
-|---|---|---|
-| `low_confidence` | `extraction/service.py` | Gemini itself returned a confidence below 60% for a specific field that still has a value. Tied to the model's own judgment, not a pixel-count guess — see [Design Decisions](#design-decisions) for why an earlier resolution/contrast-based warning was removed in favor of this. |
-| `missing_nid` | `extraction/normalizer.py` | The model couldn't read any NID digits at all. |
-| `unusual_nid_length` | `extraction/normalizer.py` | NID digits were read, but the count isn't 10, 13, or 17. |
-| `unparseable_dob` | `extraction/normalizer.py` | Date of birth couldn't be parsed from any known format, or came back in the future. |
-| `not_an_nid` | Gemini (prompt rule 3) | The uploaded image doesn't look like a Bangladesh NID at all. |
+| `code` | Critical? | Raised by | Meaning |
+|---|---|---|---|
+| `not_an_nid` | **Yes — forces partial** | Gemini (prompt rule 3) | The uploaded image doesn't look like a Bangladesh NID at all. |
+| `duplicate_address` | **Yes — forces partial** | `extraction/normalizer.py` | Present and permanent address came back byte-identical — almost always means the model copied one field into both rather than reading two genuinely matching addresses. |
+| `cross_field_collision` | **Yes — forces partial** | `extraction/normalizer.py` | Two of name/father's name/mother's name came back identical — a near-certain read error. |
+| `low_confidence` | No | `extraction/service.py` | Gemini itself returned a confidence below 60% for a specific field that still has a value. Tied to the model's own judgment, not a pixel-count guess — see [Design Decisions](#design-decisions) for why an earlier resolution/contrast-based warning was removed in favor of this. |
+| `missing_nid` | No *(field is already null, so this can't cause a false "complete")* | `extraction/normalizer.py` | The model couldn't read any NID digits at all. |
+| `unusual_nid_length` | No | `extraction/normalizer.py` | NID digits were read, but the count isn't 10, 13, or 17 — kept, not discarded, since some legitimate formats vary. |
+| `unparseable_dob` | No *(field is already null, so this can't cause a false "complete")* | `extraction/normalizer.py` | Date of birth couldn't be parsed from any known format, or came back in the future. |
+| `simulated_response` | No | `extraction/service.py` | **Always present in demo mode, on every response.** States explicitly that the data is pre-recorded fixture output, not a live read of the uploaded images — see [Demo UI](#demo-ui) and [Design Decisions](#design-decisions). |
 
 ## Project Structure
 
@@ -393,13 +405,35 @@ for text it found blurred, cropped, or ambiguous, which is a far better predicto
 count decided before anyone looked at the image. A field with a value but confidence below 60% gets
 a `low_confidence` warning naming that specific field, instead of a blanket "this whole image might
 be bad" guess.
-- **Prompt versioning (`PROMPT_VERSION = "v1.0.0"`).** Every response echoes the exact prompt
-version that produced it. Since LLM output for the same input can drift across prompt edits, this
-makes extraction results reproducible/auditable and lets a future consumer detect "this record was
-extracted under an older prompt" without guessing.
-- **No persistence, anywhere.** Uploaded images exist only in request memory for the duration of one
-call; nothing is written to disk, a database, or logs. This is a deliberate scope boundary for a
-KYC-adjacent PII use case — see [Privacy](#privacy).
+- **Critical warnings override field-completeness for `status`.** `status` was originally just "are
+all seven fields non-null" — but a field can be non-null and still be wrong (Gemini duplicating one
+address into both `presentAddress` and `permanentAddress`, or copying a name across `name`/
+`fatherName`/`motherName`). `duplicate_address`, `cross_field_collision`, and `not_an_nid` are marked
+critical (`CRITICAL_WARNING_CODES` in `service.py`) specifically because each one means the *data*
+is very likely wrong, not just imprecise — their presence forces `status: "partial"` regardless of
+field completeness. `low_confidence` and the normalizer's per-field warnings are deliberately **not**
+critical: they're informational flags for a human reviewer, not evidence the extraction failed.
+- **Bounded, defensive image handling.** Beyond the compressed-upload-size cap (`MAX_IMAGE_SIZE_MB`,
+checked before decode), decoded images are also capped at 50 megapixels — a small, highly-compressible
+file can still decode into an enormous pixel grid ("decompression bomb"), which a compressed-byte-size
+limit alone can't catch. The Gemini call itself has a 30-second timeout (`PROVIDER_TIMEOUT_SECONDS`),
+so a hung provider can't hang the request indefinitely; any provider failure (timeout, network error,
+unparseable response) is logged with full detail server-side but surfaced to the client as one of a
+few fixed, generic messages — the raw SDK exception is never echoed back, since it can carry internal
+details that shouldn't cross the API boundary.
+- **Prompt versioning (`PROMPT_VERSION = "v1.0.0"`).** Every response echoes the exact version of
+the *Gemini extraction prompt text* (`EXTRACTION_PROMPT` in `gemini_provider.py`) that produced it —
+it is not a version for the whole pipeline. Normalizer/validation logic (the critical-warning rules,
+cross-field checks, image bounds, etc.) can and does change independently without bumping this
+number, because those changes don't affect what was asked of the model, only how its output is
+checked afterward. Since LLM output for the same input can drift across *prompt* edits specifically,
+this makes extraction results reproducible/auditable against prompt changes and lets a future
+consumer detect "this record was extracted under an older prompt" without guessing.
+- **No persistence of uploaded data.** Images and extracted field values exist only in request memory
+for the duration of one call; neither is ever written to disk, a database, or a log line. This is a
+deliberate scope boundary for a KYC-adjacent PII use case — see [Privacy](#privacy). This is
+distinct from *operational* logging: provider failures do write a sanitized, PII-free error record
+(exception type and traceback, never field values or image bytes) so failures are debuggable.
 - **In-memory, single-request processing.** No queue, no background jobs, no batch endpoint. Simpler
 failure model (the HTTP response *is* the result — no polling), appropriate for the case study's
 synchronous, single-card use case; batch/async would be the natural next step for production volume
@@ -440,8 +474,12 @@ missing-field request returns 422, and confirm the sample-image routes respond �
 - **No persistence.** Front/back images are read into memory, validated, preprocessed, sent to the
 provider, and discarded when the request completes. No file, database, or object-store write ever
 happens.
-- **No PII in logs.** The only startup log line prints `mode` and `model`; per-request logs are
-Uvicorn's access log (method/path/status), not field values.
+- **No PII in logs.** The startup log line prints only `mode` and `model`; per-request logs are
+Uvicorn's access log (method/path/status), not field values. Provider failures (timeout, network
+error, unparseable response) are logged server-side with the exception type/traceback for debugging,
+but never with the uploaded image bytes or any extracted field value — and the corresponding
+`PROVIDER_UNAVAILABLE` response sent to the client is always one of a few fixed, generic strings,
+never the raw exception (see [Error Codes](#error-codes)).
 - **Synthetic images only in this repo.** `fixtures/samples/*.png` are programmatically generated
 (see [scripts/generate_samples.py](scripts/generate_samples.py)) and contain no real person's data.
 - **This is not production-ready for real PII as-is.** Real deployment against real NID cards would
@@ -450,6 +488,26 @@ aren't used for model training, explicit customer consent language before upload
 transit (already true — HTTPS at the ingress in front of this service) and a documented retention
 policy (currently: none, by design, but a production system would need audit trails), and a security
 review of the multipart upload path.
+
+## AI Usage
+
+**Tools.** Claude (via the Claude Code CLI/VS Code extension) was used for scaffolding and
+implementation throughout this project. Gemini (flash-tier, via `gemini-flash-latest`) is a runtime
+dependency of the shipped application itself — it performs live extraction in `APP_MODE=live` — not
+a development tool.
+
+**Verification approach.** Every change was checked the same way: the automated test suite
+(`docker compose exec api pytest`), curl/smoke-test checks against a running container for new
+endpoints and error paths, and a full read-through of generated code before treating it as done —
+not accepted on the basis that it "looked right."
+
+**What AI-generated code was changed, and why.** A non-exhaustive but representative sample: an
+early dependency version's response-schema handling didn't work against the live API and was
+upgraded; a model alias that stopped being available for new API keys was swapped for a stable one;
+a CSS rule was found to silently defeat an element-visibility toggle and was fixed at its root cause;
+an initial image-quality heuristic (a fixed resolution/contrast threshold) was found to misfire on a
+real photo and was replaced with a confidence-driven check instead. In each case the fix was verified
+against a real run of the system, not assumed from reading the diff.
 
 ## Limitations
 

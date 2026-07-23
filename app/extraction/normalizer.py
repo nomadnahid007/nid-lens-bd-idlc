@@ -109,6 +109,46 @@ def _normalize_dob(value: str | None, warnings: list[dict]) -> str | None:
     return None
 
 
+def _same(a: str | None, b: str | None) -> bool:
+    return bool(a) and bool(b) and a.strip().casefold() == b.strip().casefold()
+
+
+def _cross_field_checks(result: dict) -> list[dict]:
+    """Checks across multiple fields rather than within one — these catch a
+    class of extraction error a per-field check can't see, e.g. the model
+    reading the same text twice into two different fields. Both warning codes
+    here are treated as critical by ExtractionService (they force `status`
+    to "partial" even if every field technically has a value), because a
+    collision like this means at least one of the two fields is very likely
+    wrong, not just imprecise."""
+    warnings: list[dict] = []
+
+    if _same(result.get("presentAddress"), result.get("permanentAddress")):
+        warnings.append({
+            "code": "duplicate_address",
+            "message": (
+                "Present and permanent addresses are identical — verify this wasn't a read "
+                "error rather than a genuine match."
+            ),
+            "field": None,
+        })
+
+    name_fields = [
+        ("name", "fatherName", "Name and father's name"),
+        ("name", "motherName", "Name and mother's name"),
+        ("fatherName", "motherName", "Father's name and mother's name"),
+    ]
+    for field_a, field_b, label in name_fields:
+        if _same(result.get(field_a), result.get(field_b)):
+            warnings.append({
+                "code": "cross_field_collision",
+                "message": f"{label} are identical — likely a read error rather than a genuine match.",
+                "field": None,
+            })
+
+    return warnings
+
+
 def normalize(data: dict) -> tuple[dict, list[dict]]:
     warnings: list[dict] = []
     result = {}
@@ -127,5 +167,7 @@ def normalize(data: dict) -> tuple[dict, list[dict]]:
         if isinstance(value, str):
             value = re.sub(r"\s+", " ", value).strip() or None
         result[field] = value
+
+    warnings.extend(_cross_field_checks(result))
 
     return result, warnings

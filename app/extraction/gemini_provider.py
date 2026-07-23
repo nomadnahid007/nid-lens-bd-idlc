@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 
 from google import genai
 from google.genai import types
@@ -8,7 +9,10 @@ from app.config import Settings
 from app.extraction.provider import ExtractionProvider
 from app.models.schemas import GeminiExtractionSchema
 
+logger = logging.getLogger("nid_lens_bd.gemini_provider")
+
 PROMPT_VERSION = "v1.0.0"
+PROVIDER_TIMEOUT_SECONDS = 30
 
 EXTRACTION_PROMPT = """You are extracting structured data from a Bangladesh National ID (NID) card. You will receive two images labeled FRONT and BACK.
 
@@ -54,18 +58,33 @@ class GeminiProvider(ExtractionProvider):
         ]
 
         try:
-            response = await asyncio.to_thread(
-                self.client.models.generate_content,
-                model=self.model,
-                contents=contents,
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                    response_schema=GeminiExtractionSchema,
-                    temperature=0.1,
+            response = await asyncio.wait_for(
+                asyncio.to_thread(
+                    self.client.models.generate_content,
+                    model=self.model,
+                    contents=contents,
+                    config=types.GenerateContentConfig(
+                        response_mime_type="application/json",
+                        response_schema=GeminiExtractionSchema,
+                        temperature=0.1,
+                    ),
                 ),
+                timeout=PROVIDER_TIMEOUT_SECONDS,
             )
-        except Exception as e:
-            raise ProviderError(f"Gemini extraction failed: {e}") from e
+        except asyncio.TimeoutError:
+            logger.error("Gemini extraction timed out after %ss", PROVIDER_TIMEOUT_SECONDS)
+            # Client-facing message is deliberately generic — the raw SDK
+            # exception is logged server-side but never echoed back, since it
+            # can carry internal request/response details that shouldn't be
+            # exposed over the API.
+            raise ProviderError(
+                f"The extraction provider timed out after {PROVIDER_TIMEOUT_SECONDS}s. Please try again."
+            ) from None
+        except Exception:
+            logger.exception("Gemini extraction call failed")
+            raise ProviderError(
+                "The extraction provider is currently unavailable. Please try again shortly."
+            ) from None
 
         parsed = getattr(response, "parsed", None)
         if isinstance(parsed, GeminiExtractionSchema):
@@ -75,5 +94,8 @@ class GeminiProvider(ExtractionProvider):
 
         try:
             return json.loads(response.text)
-        except Exception as e:
-            raise ProviderError(f"Gemini extraction failed: could not parse response ({e})") from e
+        except Exception:
+            logger.exception("Gemini response could not be parsed as JSON")
+            raise ProviderError(
+                "The extraction provider returned an unexpected response. Please try again."
+            ) from None

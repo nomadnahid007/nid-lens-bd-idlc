@@ -131,3 +131,102 @@ def test_high_confidence_fields_are_not_flagged():
     response = asyncio.run(service.extract(_valid_png_bytes(), _valid_png_bytes()))
 
     assert [w for w in response.warnings if w.code == "low_confidence"] == []
+
+
+def test_not_an_nid_warning_forces_partial_even_with_all_fields_present():
+    # All seven fields technically have a value, but the provider itself says
+    # the card doesn't look like an NID — a critical warning must override
+    # field-completeness and keep this out of "complete".
+    data = {
+        "name": "Md. Rahim Uddin",
+        "fatherName": "Md. Abdul Karim",
+        "motherName": "Amena Begum",
+        "dateOfBirth": "1998-01-15",
+        "nidNumber": "1234567890",
+        "presentAddress": "Dhaka",
+        "permanentAddress": "Cumilla",
+    }
+    provider_warnings = [{"code": "not_an_nid", "message": "Does not look like an NID", "field": None}]
+    service = ExtractionService(_StubProvider(data, provider_warnings), _settings())
+
+    response = asyncio.run(service.extract(_valid_png_bytes(), _valid_png_bytes()))
+
+    assert response.status == "partial"
+
+
+def test_duplicate_address_forces_partial():
+    data = {
+        "name": "Md. Rahim Uddin",
+        "fatherName": "Md. Abdul Karim",
+        "motherName": "Amena Begum",
+        "dateOfBirth": "1998-01-15",
+        "nidNumber": "1234567890",
+        "presentAddress": "House 12, Dhaka",
+        "permanentAddress": "House 12, Dhaka",  # identical to presentAddress
+    }
+    service = ExtractionService(_StubProvider(data), _settings())
+
+    response = asyncio.run(service.extract(_valid_png_bytes(), _valid_png_bytes()))
+
+    assert response.status == "partial"
+    codes = [w.code for w in response.warnings]
+    assert "duplicate_address" in codes
+
+
+def test_cross_field_name_collision_forces_partial():
+    data = {
+        "name": "Md. Rahim Uddin",
+        "fatherName": "Md. Rahim Uddin",  # identical to name
+        "motherName": "Amena Begum",
+        "dateOfBirth": "1998-01-15",
+        "nidNumber": "1234567890",
+        "presentAddress": "Dhaka",
+        "permanentAddress": "Cumilla",
+    }
+    service = ExtractionService(_StubProvider(data), _settings())
+
+    response = asyncio.run(service.extract(_valid_png_bytes(), _valid_png_bytes()))
+
+    assert response.status == "partial"
+    codes = [w.code for w in response.warnings]
+    assert "cross_field_collision" in codes
+
+
+def test_low_confidence_alone_does_not_force_partial():
+    # Confirms low_confidence stays informational-only, unlike the critical
+    # codes above — this is a deliberate distinction, not an oversight.
+    data = {
+        "name": "Md. Rahim Uddin",
+        "fatherName": "Md. Abdul Karim",
+        "motherName": "Amena Begum",
+        "dateOfBirth": "1998-01-15",
+        "nidNumber": "1234567890",
+        "presentAddress": "Dhaka",
+        "permanentAddress": "Cumilla",
+    }
+    service = ExtractionService(_StubProvider(data, confidence={"name": 0.1}), _settings())
+
+    response = asyncio.run(service.extract(_valid_png_bytes(), _valid_png_bytes()))
+
+    assert response.status == "complete"
+
+
+def test_demo_mode_response_is_labeled_simulated():
+    data = {
+        "name": "Md. Rahim Uddin",
+        "fatherName": "Md. Abdul Karim",
+        "motherName": "Amena Begum",
+        "dateOfBirth": "1998-01-15",
+        "nidNumber": "1234567890",
+        "presentAddress": "Dhaka",
+        "permanentAddress": "Cumilla",
+    }
+    service = ExtractionService(_StubProvider(data), Settings(app_mode="demo"))
+
+    response = asyncio.run(service.extract(_valid_png_bytes(), _valid_png_bytes()))
+
+    codes = [w.code for w in response.warnings]
+    assert "simulated_response" in codes
+    # Being labeled simulated doesn't itself force partial — the fixture data
+    # is genuinely complete, it's just not a live read of the uploaded images.
+    assert response.status == "complete"

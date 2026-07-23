@@ -81,3 +81,80 @@ def test_extract_tiny_image_returns_400():
 
     assert response.status_code == 400
     assert response.json()["code"] == "INVALID_IMAGE"
+
+
+def test_extract_corrupt_image_returns_400():
+    # Not a truncated/malformed image file, garbage bytes with no valid
+    # image header at all — must fail at decode, not crash the server.
+    front = b"\x00\x01\x02not-an-image\xff\xfe" * 20
+    back = _image_bytes()
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/v1/nid/extract",
+            files={
+                "front": ("front.png", front, "image/png"),
+                "back": ("back.png", back, "image/png"),
+            },
+        )
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "INVALID_IMAGE"
+
+
+def test_extract_empty_image_returns_400():
+    front = b""
+    back = _image_bytes()
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/v1/nid/extract",
+            files={
+                "front": ("front.png", front, "image/png"),
+                "back": ("back.png", back, "image/png"),
+            },
+        )
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "INVALID_IMAGE"
+
+
+def test_extract_oversized_image_returns_413():
+    from app.config import get_settings
+
+    settings = get_settings()
+    oversized = b"\x00" * (settings.max_image_size_mb * 1024 * 1024 + 1)
+    back = _image_bytes()
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/v1/nid/extract",
+            files={
+                "front": ("front.png", oversized, "image/png"),
+                "back": ("back.png", back, "image/png"),
+            },
+        )
+
+    assert response.status_code == 413
+    assert response.json()["code"] == "IMAGE_TOO_LARGE"
+
+
+def test_extract_decompression_bomb_returns_400():
+    # A flat-color image compresses extremely well — this decodes to well
+    # over the 50-megapixel decoded-pixel cap while staying under the
+    # byte-size limit, so it specifically exercises the decoded-pixel check
+    # rather than the compressed-size check above.
+    front = _image_bytes(size=(9000, 9000))  # 81 megapixels decoded
+    back = _image_bytes()
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/v1/nid/extract",
+            files={
+                "front": ("front.png", front, "image/png"),
+                "back": ("back.png", back, "image/png"),
+            },
+        )
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "INVALID_IMAGE"

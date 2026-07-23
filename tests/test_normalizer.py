@@ -49,3 +49,35 @@ def test_missing_nid_becomes_null_with_warning():
     normalized, warnings = normalize(_base_data(nidNumber=None))
     assert normalized["nidNumber"] is None
     assert any(w["code"] == "missing_nid" for w in warnings)
+
+
+def test_duplicate_address_is_flagged():
+    normalized, warnings = normalize(_base_data(presentAddress="House 12, Dhaka", permanentAddress="House 12, Dhaka"))
+    assert any(w["code"] == "duplicate_address" for w in warnings)
+
+
+def test_duplicate_address_is_case_and_whitespace_insensitive():
+    normalized, warnings = normalize(
+        _base_data(presentAddress="  House 12, Dhaka  ", permanentAddress="house 12, dhaka")
+    )
+    assert any(w["code"] == "duplicate_address" for w in warnings)
+
+
+def test_different_addresses_are_not_flagged():
+    normalized, warnings = normalize(_base_data(presentAddress="Dhaka", permanentAddress="Cumilla"))
+    assert not any(w["code"] == "duplicate_address" for w in warnings)
+
+
+def test_name_and_father_name_collision_is_flagged():
+    normalized, warnings = normalize(_base_data(name="Md. Rahim Uddin", fatherName="Md. Rahim Uddin"))
+    assert any(w["code"] == "cross_field_collision" for w in warnings)
+
+
+def test_father_and_mother_name_collision_is_flagged():
+    normalized, warnings = normalize(_base_data(fatherName="Amena Begum", motherName="Amena Begum"))
+    assert any(w["code"] == "cross_field_collision" for w in warnings)
+
+
+def test_distinct_names_are_not_flagged():
+    normalized, warnings = normalize(_base_data())
+    assert not any(w["code"] == "cross_field_collision" for w in warnings)

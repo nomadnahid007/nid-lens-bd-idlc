@@ -6,6 +6,7 @@ from app.config import Settings
 
 MAX_DIMENSION = 2000
 MIN_UPSCALE_DIMENSION = 900  # images smaller than this are upscaled so the model has more pixels to work with
+MAX_DECODED_PIXELS = 50_000_000  # ~50MP — well above any real phone photo, guards against decompression bombs
 SUPPORTED_FORMATS = {"JPEG", "PNG"}
 
 
@@ -45,6 +46,16 @@ def validate_and_prepare(image_bytes: bytes, side: str, settings: Settings) -> t
 
     img = ImageOps.exif_transpose(img)
     img = img.convert("RGB")
+
+    # Decoded-pixel bound, independent of the compressed-byte-size check above:
+    # a small, highly-compressible file (e.g. a flat-color PNG) can still
+    # decode into an enormous pixel grid ("decompression bomb"), which the
+    # MAX_IMAGE_SIZE_MB check on compressed bytes can't catch.
+    if img.width * img.height > MAX_DECODED_PIXELS:
+        raise InvalidImageError(
+            f"{side} image decodes to {img.width}x{img.height} pixels, exceeding the "
+            f"{MAX_DECODED_PIXELS:,}-pixel limit"
+        )
 
     if img.width < settings.min_image_dimension or img.height < settings.min_image_dimension:
         raise InvalidImageError(
